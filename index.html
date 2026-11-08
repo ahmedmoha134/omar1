@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>مدرسة أم جعفر الطيار – أحجية خريطة سلطنة عُمان</title>
+<style>
+/* ---------- Theme tokens (light / dark) ---------- */
+:root{--bg1:#e6f3ff;--bg2:#fff3dc;--ink:#24364b;--chip:#ffffffd9;--accent:#2f80ed;--ok:#1e9e55;--bad:#e04848;
+  --slot:#dde8f3;--slot-line:#97adc4;--tray:#f2f7fc;--board:#ffffff;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg1:#15212e;--bg2:#1d2836;--ink:#e8eef6;--chip:#243346d9;
+  --slot:#33465c;--slot-line:#6f87a1;--tray:#1b2836;--board:#213245}}
+:root[data-theme="dark"]{--bg1:#15212e;--bg2:#1d2836;--ink:#e8eef6;--chip:#243346d9;--slot:#33465c;--slot-line:#6f87a1;--tray:#1b2836;--board:#213245}
+
+html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;height:100dvh;color:var(--ink);
+  font-family:"Segoe UI",Tahoma,"Noto Naskh Arabic","Noto Kufi Arabic",system-ui,sans-serif;
+  background:linear-gradient(160deg,var(--bg1),var(--bg2));-webkit-user-select:none;user-select:none}
+
+/* ---------- Header: title, score/timer chips, buttons ---------- */
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 14px;padding:8px 10px 2px}
+.school{flex-basis:100%;text-align:center;font-weight:800;font-size:clamp(15px,2.6vw,21px);color:#fff;background:linear-gradient(90deg,#2f80ed,#27ae60);border-radius:12px;padding:4px 12px;box-shadow:0 2px 6px #0003}
+h1{margin:0;font-size:clamp(17px,3.2vw,26px)} h1 small{font-size:.55em;opacity:.65;font-weight:500;margin-inline-start:6px}
+.chip{background:var(--chip);border-radius:999px;padding:4px 12px;font-weight:700;box-shadow:0 1px 4px #0002;white-space:nowrap}
+button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:7px 12px;color:#fff;background:var(--accent);cursor:pointer;
+  box-shadow:0 3px 0 #1d5fb8;touch-action:manipulation}
+button:active{transform:translateY(2px);box-shadow:0 1px 0 #1d5fb8}
+button.alt{background:#f2994a;box-shadow:0 3px 0 #c97a30} button.off{opacity:.55}
+.msg{text-align:center;padding:4px 12px;font-weight:700;min-height:1.5em;font-size:clamp(14px,2.4vw,18px)}
+.msg.ok{color:var(--ok)} .msg.bad{color:var(--bad)}
+
+/* ---------- Game board (SVG) ---------- */
+#game{flex:1;min-height:0;width:100%;display:block;touch-action:none}   /* touch-action:none = no page scroll while dragging */
+.board{fill:var(--board);stroke:var(--slot-line);stroke-width:2}
+.tray{fill:var(--tray);stroke:var(--slot-line);stroke-width:2;stroke-dasharray:8 6}
+.slot{fill:var(--slot);stroke:var(--slot-line);stroke-width:1.5;stroke-dasharray:5 4;transition:fill .15s}
+.slot.near{fill:#ffe9a0;stroke:#f2994a;stroke-width:3}                    /* snapping guide */
+.slot.filled{opacity:0}
+.piece{cursor:grab;transition:transform .35s cubic-bezier(.2,.9,.3,1.2);transform-origin:0 0}
+.piece.drag{transition:none;cursor:grabbing;filter:drop-shadow(0 8px 8px #0005)}
+.piece path{stroke:#fff;stroke-width:1.6;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.piece.sel path{stroke:#2f80ed;stroke-width:4}
+.piece.placed{cursor:default;pointer-events:none}
+.piece.pop path{animation:flash .7s} .piece.bad path{animation:badflash .5s}
+.lbl{font-weight:800;fill:#1c2b3a;stroke:#ffffffe0;paint-order:stroke;stroke-linejoin:round;pointer-events:none}
+.slot.hint{animation:pulse .45s infinite alternate} .piece.hint path{animation:glow .45s infinite alternate}
+@keyframes flash{50%{filter:brightness(1.45) saturate(1.4)}}
+@keyframes badflash{50%{fill:var(--bad)}}
+@keyframes pulse{to{fill:#ffd54a;stroke:#f2994a}}
+@keyframes glow{to{filter:brightness(1.4) drop-shadow(0 0 6px #fff)}}
+
+/* ---------- Win overlay + confetti ---------- */
+#win{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0006;z-index:5}
+#win[hidden]{display:none}
+.card{background:var(--board);border-radius:24px;padding:24px 30px;text-align:center;box-shadow:0 10px 40px #0006;max-width:86vw}
+.card h2{margin:0 0 6px;font-size:28px} #winstars{font-size:40px;margin:4px 0}
+.conf{position:fixed;top:-30px;font-size:26px;z-index:6;pointer-events:none;animation:fall 3s linear forwards}
+@keyframes fall{to{transform:translateY(112vh) rotate(420deg)}}
+</style>
+</head>
+<body>
+<header>
+  <div class="school">🏫 مدرسة أم جعفر الطيار</div>
+  <h1>🧩 أحجية خريطة سلطنة عُمان <small>Oman Map Puzzle</small></h1>
+  <span class="chip">⭐ <b id="score">0</b></span>
+  <span class="chip">⏱ <b id="time">00:00</b></span>
+  <span class="chip">✅ <b id="done">0</b>/<span id="total"></span></span>
+  <button id="hint" class="alt">💡 تلميح / Hint</button>
+  <button id="reset">🔄 إعادة / Reset</button>
+  <button id="snd">🔊</button>
+  <button id="nm" title="إظهار الأسماء">🏷️</button>
+</header>
+<div id="msg" class="msg"></div>
+<svg id="game" viewBox="0 0 1 1" preserveAspectRatio="xMidYMid meet" aria-label="Oman map puzzle"></svg>
+
+<div id="win" hidden><div class="card">
+  <h2>🎉 أحسنت! أكملت الخريطة 🎉</h2><p style="margin:0;font-weight:700">🏫 مدرسة أم جعفر الطيار</p><div id="winstars"></div><p id="wintext"></p>
+  <button id="again">🔁 العب مرة أخرى</button></div></div>
+
+<script>
+(() => {
+/* ================= DATA =================
+   Generated automatically from the map image by build_game.py:
+   id, ar (Arabic name), col (original colour), d (SVG path outline in image pixels),
+   b (bounding-box centre = the piece's pivot), c (label point, the "most inside" spot). */
+const REGIONS = [{"id":"musandam","ar":"مسندم","col":"#f4b97f","d":"M346,35L334,35L329,41L332,43L333,77L337,80L339,79L340,72L345,68L347,61L349,60L349,55L351,54L351,46L353,43L346,40Z","b":[341,58],"c":[341,49]},{"id":"buraimi","ar":"البريمي","col":"#f7c5b4","d":"M320,133L311,135L307,140L308,160L305,168L309,183L312,184L312,192L318,192L319,195L323,197L323,206L311,210L292,210L289,213L282,215L288,220L288,232L283,239L282,248L276,254L275,261L286,266L295,264L301,255L312,252L322,254L325,251L324,249L328,241L321,236L322,226L319,221L327,216L327,211L333,211L343,215L351,213L348,210L347,201L343,198L343,187L347,182L338,178L338,172L335,166L336,163L340,163L337,160L338,153L335,150L331,152L325,152L321,146L321,139L323,137Z","b":[313,200],"c":[304,237]},{"id":"n_batinah","ar":"شمال الباطنة","col":"#eb8990","d":"M347,133L347,139L342,143L335,145L335,149L339,153L338,160L341,163L339,165L336,164L339,178L343,178L348,182L344,187L344,198L348,201L349,210L352,212L351,218L359,222L366,235L371,235L378,242L381,239L383,242L386,241L387,245L389,245L393,251L397,248L400,249L409,245L416,239L427,238L427,236L436,229L434,226L412,219L392,205L385,194L380,192L380,187L374,179L364,170Z","b":[386,192],"c":[375,213]},{"id":"s_batinah","ar":"جنوب الباطنة","col":"#68acce","d":"M401,249L404,253L398,258L403,263L403,268L407,268L421,278L430,281L440,279L453,283L455,282L457,275L461,272L460,268L465,264L465,260L468,257L474,258L478,245L474,235L462,236L454,231L446,231L435,227L437,229L429,235L427,239L416,240L409,246Z","b":[438,255],"c":[440,257]},{"id":"muscat","ar":"مسقط","col":"#db214c","d":"M476,236L479,245L477,252L489,255L495,262L500,275L505,273L507,277L512,275L517,280L519,278L522,281L529,280L532,283L532,288L538,291L544,298L546,295L553,292L539,268L531,267L531,260L528,252L522,250L513,242L511,245L493,244L481,236Z","b":[515,267],"c":[511,260]},{"id":"dhahirah","ar":"الظاهرة","col":"#449284","d":"M350,215L343,216L337,213L327,212L328,216L320,221L323,226L322,236L329,241L325,249L326,251L322,255L312,253L301,256L293,266L286,267L275,262L272,271L264,283L261,315L295,371L295,378L280,427L357,417L364,414L365,404L368,401L366,394L372,358L378,350L379,334L377,327L385,317L395,314L393,310L390,310L387,306L390,300L390,288L392,285L390,281L393,278L400,276L401,273L406,270L402,268L403,265L397,258L403,253L397,249L393,252L390,247L386,245L386,242L383,243L381,240L378,243L371,236L366,236L358,222L352,220Z","b":[334,320],"c":[324,312]},{"id":"dakhiliyah","ar":"الداخلية","col":"#98af85","d":"M489,256L476,253L474,259L468,258L466,264L461,268L462,272L458,275L456,282L453,284L440,280L430,282L421,279L407,269L400,277L391,281L393,285L391,288L391,300L388,306L390,309L393,309L396,314L385,318L378,327L380,343L379,350L373,358L367,394L369,401L366,404L365,414L360,416L364,417L360,428L370,437L375,436L405,451L471,463L471,450L477,439L475,427L491,422L489,419L491,418L518,436L520,442L524,425L520,437L492,418L489,418L490,421L488,423L476,426L474,424L473,413L477,409L477,406L472,399L467,397L469,393L457,370L454,367L446,368L449,365L449,359L464,341L464,337L460,333L463,331L464,322L469,317L470,310L468,309L471,305L467,296L473,296L476,292L492,289L494,286L499,285L496,281L497,276L503,274L506,277L505,274L500,276L498,274L494,262Z","b":[442,358],"c":[416,404]},{"id":"n_sharqiyah","ar":"شمال الشرقية","col":"#9cce59","d":"M502,275L497,277L497,281L500,283L499,286L494,287L492,290L476,293L473,297L468,296L472,305L469,309L471,310L470,317L465,322L464,331L461,333L464,335L465,341L450,359L450,365L447,368L454,366L458,370L470,393L468,397L472,398L478,406L478,409L474,413L476,425L488,422L488,418L492,417L520,436L528,415L528,404L524,399L525,391L527,390L532,395L533,404L535,406L546,398L547,367L549,360L546,356L547,344L541,338L549,330L553,329L558,333L561,333L562,331L556,318L552,314L551,309L544,303L543,297L531,288L531,283L529,281L522,282L520,279L517,281L512,276L505,278Z","b":[505,356],"c":[503,356]},{"id":"s_sharqiyah","ar":"جنوب الشرقية","col":"#a1b0b6","d":"M565,301L558,306L547,304L552,309L553,314L557,318L563,331L561,334L558,334L552,330L542,338L548,344L547,356L550,360L548,367L547,398L535,407L532,404L531,395L527,391L525,394L525,399L529,404L529,415L518,452L520,453L520,456L532,457L533,459L524,470L523,478L517,483L512,501L505,507L499,505L493,506L505,508L514,502L519,489L542,449L553,437L572,424L579,416L611,356L612,342L607,330L588,327L583,324L573,314Z","b":[553,405],"c":[578,357]},{"id":"wusta","ar":"الوسطى","col":"#b4975a","d":"M494,420L490,419L491,423L476,427L478,439L472,450L471,464L405,452L375,437L370,438L359,428L363,417L279,428L245,536L251,538L250,544L310,639L303,649L308,657L322,657L316,660L325,663L346,699L361,686L361,679L364,675L367,662L368,649L383,633L409,623L424,620L449,620L458,616L455,610L455,603L452,601L451,597L452,581L448,575L449,563L447,561L447,555L451,551L458,527L457,518L462,512L468,509L468,501L475,498L476,490L483,486L492,487L492,493L487,501L488,503L493,505L499,504L502,506L509,503L516,483L522,478L523,470L532,459L519,456L519,453L517,452L519,438L507,431Z","b":[389,558],"c":[355,533]},{"id":"dhofar","ar":"ظفار","col":"#f8c300","d":"M250,538L244,536L19,617L77,746L76,753L81,756L102,804L127,796L140,796L150,787L164,785L173,777L192,774L220,775L222,779L229,781L241,778L244,775L248,775L263,759L266,745L261,741L261,733L263,729L272,722L277,710L294,704L314,704L316,702L332,701L346,702L345,697L324,663L315,660L321,657L308,658L302,649L309,639L249,544Z","b":[183,670],"c":[177,671]}];
+const W = 635, H = 819, N = REGIONS.length;   // map image size = board coordinate system
+const SNAP = 30;      // max distance (px) for a drop to count as correct
+const NEAR = 85;      // distance at which the slot lights up as a guide
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('game'), $ = id => document.getElementById(id);
+
+let pieces = [], L, drag = null, sel = null, piecesG, boardR, trayR;
+let score = 0, wrong = 0, done = 0, t0 = 0, tick = null, finished = false, sound = true, showNames = true, ac = null;
+
+const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const pad = n => String(n).padStart(2, '0');
+const slotEl = p => svg.querySelector(`.slot[data-id="${p.r.id}"]`);
+const dist = p => Math.hypot(p.x - p.r.b[0], p.y - p.r.b[1]);
+
+/* ================= SOUND (Web Audio, no files needed) ================= */
+function beep(f, start, dur, type = 'sine', vol = .18) {
+  if (!sound || !ac) return;
+  const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + start;
+  o.type = type; o.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+  o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + dur);
+}
+const sfx = {
+  ok: () => [523, 659, 784].forEach((f, i) => beep(f, i * .09, .25)),
+  bad: () => { beep(180, 0, .28, 'sawtooth', .12); beep(140, .12, .3, 'sawtooth', .12); },
+  pick: () => beep(660, 0, .08, 'sine', .1),
+  win: () => [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => beep(f, i * .12, .3, 'triangle', .2))
+};
+
+/* ================= LAYOUT =================
+   Wide screens: board on the left, tray on the right. Phones/portrait: tray under the board. */
+function computeLayout() {
+  return innerWidth > innerHeight * 1.05
+    ? { vw: 2 * W + 20, vh: H, tx: W + 20, ty: 0, tw: W, th: H, cols: 3, s: .5 }
+    : { vw: W, vh: H + 400, tx: 0, ty: H + 20, tw: W, th: 380, cols: 4, s: .38 };
+}
+function trayPos(i) {
+  const rows = Math.ceil(N / L.cols), cw = L.tw / L.cols, ch = L.th / rows;
+  return [L.tx + (i % L.cols + .5) * cw, L.ty + (Math.floor(i / L.cols) + .5) * ch];
+}
+function applyLayout() {
+  L = computeLayout();
+  svg.setAttribute('viewBox', `0 0 ${L.vw} ${L.vh}`);
+  boardR.setAttribute('width', W); boardR.setAttribute('height', H);
+  for (const [k, v] of Object.entries({ x: L.tx, y: L.ty, width: L.tw, height: L.th })) trayR.setAttribute(k, v);
+  pieces.forEach((p, i) => { if (!p.placed && p !== (drag && drag.p)) { [p.x, p.y] = trayPos(i); p.s = L.s; render(p); } });
+}
+addEventListener('resize', applyLayout);
+
+/* ================= BUILD / RENDER ================= */
+function build() {
+  svg.innerHTML = ''; clearInterval(tick);
+  score = wrong = done = t0 = 0; finished = false; sel = null; drag = null;
+  $('time').textContent = '00:00'; $('total').textContent = N;
+  boardR = mk('rect', { class: 'board', x: 0, y: 0, rx: 18 }, svg);
+  trayR = mk('rect', { class: 'tray', rx: 18 }, svg);
+  const slotsG = mk('g', {}, svg); piecesG = mk('g', {}, svg);
+  REGIONS.forEach(r => mk('path', { d: r.d, class: 'slot', 'data-id': r.id }, slotsG));   // empty slots (the map silhouette)
+  pieces = shuffle(REGIONS.slice()).map(r => {
+    const g = mk('g', { class: 'piece' }, piecesG); mk('path', { d: r.d, fill: r.col }, g);
+    const t = mk('text', { x: r.c[0], y: r.c[1], class: 'lbl', 'text-anchor': 'middle', 'dominant-baseline': 'middle' }, g);
+    t.textContent = r.ar;
+    return { r, g, t, x: 0, y: 0, s: 1, placed: false };
+  });
+  applyLayout(); updateHud(); say('اسحب كل قطعة إلى مكانها الصحيح على الخريطة 👆 (أو اضغط القطعة ثم اضغط مكانها)');
+}
+/* A piece is drawn in map coordinates; we move its pivot b to (x,y) and scale it (small in tray, 1:1 on map). */
+function render(p) {
+  p.g.style.transform = `translate(${p.x}px,${p.y}px) scale(${p.s}) translate(${-p.r.b[0]}px,${-p.r.b[1]}px)`;
+  const fs = p.s === 1 ? 15 : 22 / p.s;          // keep labels readable in the tray
+  p.t.style.fontSize = fs + 'px'; p.t.style.strokeWidth = fs * .28 + 'px';
+  p.t.style.display = (p.placed || showNames) ? '' : 'none';
+}
+function say(txt, cls = '') { const m = $('msg'); m.textContent = txt; m.className = 'msg ' + cls; }
+function updateHud() { $('score').textContent = score; $('done').textContent = done; }
+function startTimer() {
+  if (t0) return; t0 = Date.now();
+  tick = setInterval(() => { const s = (Date.now() - t0) / 1000 | 0; $('time').textContent = pad(s / 60 | 0) + ':' + pad(s % 60); }, 500);
+}
+
+/* ================= GAME LOGIC ================= */
+const cheers = ['أحسنت!', 'ممتاز!', 'رائع!', 'برافو!', 'عمل مذهل!'];
+function place(p) {                                  // correct: snap into the slot
+  p.placed = true; p.s = 1; [p.x, p.y] = p.r.b; p.g.classList.add('placed', 'pop'); p.g.classList.remove('sel');
+  slotEl(p).classList.add('filled'); if (sel === p) sel = null;
+  score += 10; done++; sfx.ok(); render(p);
+  say(`${cheers[Math.random() * cheers.length | 0]} ${p.r.ar} ✔️`, 'ok'); updateHud();
+  if (done === N) win();
+}
+function back(p, penalize) {                         // wrong: return to the tray
+  const i = pieces.indexOf(p); [p.x, p.y] = trayPos(i); p.s = L.s; render(p);
+  if (penalize) {
+    wrong++; score = Math.max(0, score - 2); sfx.bad(); updateHud(); say('ليست هنا! حاول مرة أخرى 🤔', 'bad');
+    p.g.classList.add('bad'); setTimeout(() => p.g.classList.remove('bad'), 500);
+  }
+}
+function select(p) {                                 // tap-to-place mode
+  if (sel) sel.g.classList.remove('sel');
+  sel = (p && p !== sel) ? p : null;
+  if (sel) { sel.g.classList.add('sel'); sfx.pick(); say('الآن اضغط على مكان القطعة فوق الخريطة 👆'); }
+}
+function win() {
+  finished = true; clearInterval(tick); sfx.win();
+  for (let i = 0; i < 45; i++) { const c = document.createElement('div'); c.className = 'conf';
+    c.textContent = ['🎉', '⭐', '🎊', '✨'][i % 4]; c.style.left = Math.random() * 100 + 'vw'; c.style.animationDelay = Math.random() * 1.2 + 's';
+    document.body.appendChild(c); setTimeout(() => c.remove(), 4800); }
+  const stars = wrong <= 3 ? 3 : wrong <= 8 ? 2 : 1;
+  $('winstars').textContent = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
+  $('wintext').textContent = `النقاط: ${score} — الوقت: ${$('time').textContent}`; $('win').hidden = false;
+}
+
+/* ================= INPUT (pointer events = mouse + touch + pen) ================= */
+function pt(e) { const q = svg.createSVGPoint(); q.x = e.clientX; q.y = e.clientY; return q.matrixTransform(svg.getScreenCTM().inverse()); }
+svg.addEventListener('pointerdown', e => {
+  if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} }
+  if (ac && ac.state === 'suspended') ac.resume();
+  if (finished) return;
+  const g = e.target.closest('.piece'), slot = e.target.closest('.slot');
+  if (g && !g.classList.contains('placed')) {
+    startTimer(); drag = { p: pieces.find(q => q.g === g), sx: e.clientX, sy: e.clientY, moved: false, dy: e.pointerType === 'touch' ? -45 : 0 };
+    svg.setPointerCapture(e.pointerId); e.preventDefault();
+  } else if (slot && sel) {                          // tap-to-place: chosen piece + tapped slot
+    const p = sel; select(null);
+    slot.dataset.id === p.r.id ? place(p) : back(p, true);
+  }
+});
+svg.addEventListener('pointermove', e => {
+  if (!drag) return; const p = drag.p;
+  if (!drag.moved) {
+    if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 6) return;   // small movement = tap
+    drag.moved = true; p.g.classList.add('drag'); piecesG.appendChild(p.g); p.s = 1; select(null);
+  }
+  const q = pt(e); p.x = q.x; p.y = q.y + drag.dy; render(p);
+  slotEl(p).classList.toggle('near', dist(p) < NEAR);
+});
+const endDrag = e => {
+  if (!drag) return; const { p, moved } = drag; drag = null;
+  p.g.classList.remove('drag'); slotEl(p).classList.remove('near');
+  if (!moved) { select(p); return; }
+  if (dist(p) < SNAP) place(p);
+  else back(p, p.x > 0 && p.x < W && p.y > 0 && p.y < H);   // only penalise wrong drops made on the board
+};
+svg.addEventListener('pointerup', endDrag); svg.addEventListener('pointercancel', endDrag);
+
+/* ================= BUTTONS ================= */
+$('hint').onclick = () => {                          // flashes a random remaining piece and its slot (-1 point)
+  const rest = pieces.filter(p => !p.placed); if (!rest.length || finished) return;
+  const p = rest[Math.random() * rest.length | 0]; score = Math.max(0, score - 1); updateHud(); startTimer();
+  [slotEl(p), p.g].forEach(el => { el.classList.add('hint'); setTimeout(() => el.classList.remove('hint'), 2400); });
+  say(`💡 ضع القطعة الوامضة «${p.r.ar}» في المكان الوامض — صحيح الآن ${done} من ${N}`);
+};
+$('reset').onclick = $('again').onclick = () => { $('win').hidden = true; build(); };
+$('snd').onclick = e => { sound = !sound; e.target.textContent = sound ? '🔊' : '🔇'; };
+$('nm').onclick = e => { showNames = !showNames; e.target.classList.toggle('off', !showNames); pieces.forEach(render); };
+
+build();
+})();
+</script>
+</body>
+</html>
